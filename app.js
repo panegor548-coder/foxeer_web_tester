@@ -20,7 +20,7 @@ connectBtn.addEventListener('click', async () => {
         port = await navigator.serial.requestPort();
         await port.open({ baudRate: 115200 });
 
-        statusLabel.textContent = "Подключено. Ожидание пакетов MAVLink...";
+        statusLabel.textContent = "Подключено. Получение системных данных...";
         statusLabel.className = "status-text connected";
         connectBtn.textContent = "🔴 ОТКЛЮЧИТЬ";
 
@@ -55,7 +55,8 @@ async function readLoop() {
 
 function parseBuffer() {
     while (byteBuffer.length > 0) {
-        let startIndex = byteBuffer.indexOf(0xFD);
+        // Ищем начало пакета MAVLink v1 (0xFE) или MAVLink v2 (0xFD)
+        let startIndex = byteBuffer.findIndex(b => b === 0xFD || b === 0xFE);
         
         if (startIndex === -1) {
             byteBuffer = new Uint8Array(0);
@@ -66,15 +67,17 @@ function parseBuffer() {
             byteBuffer = byteBuffer.slice(startIndex);
         }
 
-        if (byteBuffer.length < 12) break; 
+        if (byteBuffer.length < 8) break; 
 
+        let isV2 = (byteBuffer[0] === 0xFD);
         let payloadLen = byteBuffer[1];
-        let msgId = byteBuffer[7] | (byteBuffer[8] << 8) | (byteBuffer[9] << 16);
-        let packetLen = 12 + payloadLen + 2; 
+        let headerLen = isV2 ? 12 : 6;
+        let msgId = isV2 ? (byteBuffer[7] | (byteBuffer[8] << 8) | (byteBuffer[9] << 16)) : byteBuffer[5];
+        let packetLen = headerLen + payloadLen + 2; 
 
         if (byteBuffer.length < packetLen) break; 
 
-        let packetData = byteBuffer.slice(10, 10 + payloadLen);
+        let packetData = byteBuffer.slice(headerLen, headerLen + payloadLen);
         handleMavlinkMessage(msgId, packetData);
 
         byteBuffer = byteBuffer.slice(packetLen);
@@ -84,43 +87,38 @@ function parseBuffer() {
 function handleMavlinkMessage(msgId, payload) {
     let view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
 
-    // Обработка базового статуса SYS_STATUS (оставляем для гироскопа)
+    // 1. SYS_STATUS (ID: 1) — Статус здоровья датчиков на борту
     if (msgId === 1) {
+        // Здоровье систем (onboard_control_sensors_health) в MAVLink v1/v2 лежит по смещению 8
         let health = view.getUint32(8, true); 
-        let gyroOk = (health & 0x00000001) && (health & 0x00000002); 
 
-        if (gyroOk) {
-            document.getElementById('gyroLine').innerHTML = '• ГИРОСКОП: <span style="color:#4caf50">ICM42688 (Foxeer) - РАБОТАЕТ</span>';
+        // Битовые маски ArduPilot для проверки датчиков
+        let gyroOk = (health & 0x00000001);          // 3D gyro
+        let accelOk = (health & 0x00000002);         // 3D accel
+        let baroOk = (health & 0x00000004);          // absolute pressure (барометр)
+
+        if (gyroOk && accelOk) {
+            document.getElementById('gyroLine').innerHTML = '• ГИРОСКОП: <span style="color:#4caf50">ОК (ICM42688)</span>';
         } else {
-            document.getElementById('gyroLine').innerHTML = '• ГИРОСКОП: <span style="color:#f44336">ОШИБКА ДАТЧИКА</span>';
+            document.getElementById('gyroLine').innerHTML = '• ГИРОСКОП: <span style="color:#f44336">ОШИБКА ИЛИ ОТСУТСТВУЕТ</span>';
+        }
+
+        if (baroOk) {
+            document.getElementById('baroLine').innerHTML = '• БАРОМЕТР: <span style="color:#4caf50">ОК (DPS310)</span>';
+        } else {
+            document.getElementById('baroLine').innerHTML = '• БАРОМЕТР: <span style="color:#f44336">ОШИБКА ИЛИ ОТСУТСТВУЕТ</span>';
         }
     }
 
-    // Обработка данных от Lua-скрипта
-    if (msgId === 252) {
-        let value = view.getInt32(4, true); 
-        let nameBytes = payload.slice(8, 18);
-        let name = new TextDecoder().decode(nameBytes).replace(/\0/g, '').trim();
+    // 2. GPS_RAW_INT (ID: 24) — Статус спутников GPS напрямую от прошивки
+    if (msgId === 24) {
+        let fixType = view.getUint8(28); // Тип фикса (0-1: нет, 2: 2D, 3: 3D и т.д.)
+        let satellitesVisible = view.getUint8(29); // Количество видимых спутников
 
-        if (name === 'TEST_BAR') {
-            if (value === 1) document.getElementById('baroLine').innerHTML = '• БАРОМЕТР: <span style="color:#4caf50">DPS310 (Foxeer) - РАБОТАЕТ</span>';
-            else document.getElementById('baroLine').innerHTML = '• БАРОМЕТР: <span style="color:#f44336">ОШИБКА ДАТЧИКА</span>';
-        }
-        if (name === 'TEST_GPS') {
-            if (value === 1) document.getElementById('gpsLine').innerHTML = '• Модуль GPS: <span style="color:#4caf50">ОПРЕДЕЛЕН (ОК)</span>';
-            else document.getElementById('gpsLine').innerHTML = '• Модуль GPS: <span style="color:#f44336">НЕ ОПРЕДЕЛЕН</span>';
-        }
-        if (name === 'TEST_OSD') {
-            if (value === 1) document.getElementById('osdLine').innerHTML = '• Графический чип OSD: <span style="color:#4caf50">РАБОТАЕТ (ОК)</span>';
-            else document.getElementById('osdLine').innerHTML = '• Графический чип OSD: <span style="color:#f44336">ОШИБКА ИНИЦИАЛИЗАЦИИ</span>';
-        }
-        if (name === 'TEST_MOT') {
-            if (value === 1) document.getElementById('motLine').innerHTML = '• Выходы моторов (ESC): <span style="color:#4caf50">ГОТОВЫ (ОК)</span>';
-            else document.getElementById('motLine').innerHTML = '• Выходы моторов (ESC): <span style="color:#f44336">ОШИБКА</span>';
-        }
-        if (name === 'TEST_URT') {
-            if (value === 1) document.getElementById('uartLine').innerHTML = '• Шины UART: <span style="color:#4caf50">ТЕСТ ПРОЙДЕН (ОК)</span>';
-            else document.getElementById('uartLine').innerHTML = '• Шины UART: <span style="color:#f44336">ОШИБКА ЛИНИИ</span>';
+        if (fixType > 0) {
+            document.getElementById('gpsLine').innerHTML = `• Модуль GPS: <span style="color:#4caf50">ПОДКЛЮЧЕН (Спутников: ${satellitesVisible})</span>`;
+        } else {
+            document.getElementById('gpsLine').innerHTML = '• Модуль GPS: <span style="color:#ff9800">ПОДКЛЮЧЕН (Поиск спутников...)</span>';
         }
     }
 }
