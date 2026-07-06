@@ -89,13 +89,13 @@ function handleMavlinkMessage(msgId, payload) {
 
     // 1. SYS_STATUS (ID: 1) — Статус здоровья датчиков на борту
     if (msgId === 1) {
-        // Здоровье систем (onboard_control_sensors_health) в MAVLink v1/v2 лежит по смещению 8
+        // Читаем байты здоровья систем (onboard_control_sensors_health)
         let health = view.getUint32(8, true); 
 
         // Битовые маски ArduPilot для проверки датчиков
-        let gyroOk = (health & 0x00000001);          // 3D gyro
-        let accelOk = (health & 0x00000002);         // 3D accel
-        let baroOk = (health & 0x00000004);          // absolute pressure (барометр)
+        let gyroOk = (health & 0x00000001);   // Бит 1: Гироскоп
+        let accelOk = (health & 0x00000002);  // Бит 2: Акселерометр
+        let baroOk = (health & 0x00000008);   // Бит 4: Барометр (исправлено)
 
         if (gyroOk && accelOk) {
             document.getElementById('gyroLine').innerHTML = '• ГИРОСКОП: <span style="color:#4caf50">ОК (ICM42688)</span>';
