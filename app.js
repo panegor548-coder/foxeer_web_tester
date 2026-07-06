@@ -55,6 +55,7 @@ async function readLoop() {
 
 function parseBuffer() {
     while (byteBuffer.length > 0) {
+        // Ищем начало пакета MAVLink v1 (0xFE) или MAVLink v2 (0xFD)
         let startIndex = byteBuffer.findIndex(b => b === 0xFD || b === 0xFE);
         
         if (startIndex === -1) {
@@ -88,14 +89,13 @@ function handleMavlinkMessage(msgId, payload) {
 
     // 1. SYS_STATUS (ID: 1) — Статус здоровья датчиков на борту
     if (msgId === 1) {
-        let present = view.getUint32(0, true); // какие датчики есть на борту
-        let health  = view.getUint32(8, true); // какие работают нормально
+        // Здоровье систем (onboard_control_sensors_health) в MAVLink v1/v2 лежит по смещению 8
+        let health = view.getUint32(8, true); 
 
-        let gyroOk  = (health & 0x00000001); // 3D gyro
-        let accelOk = (health & 0x00000002); // 3D accel
-        let baroOk  = (health & 0x00000008); // absolute pressure (барометр) — исправлено с 0x04
-
-        let baroPresent = (present & 0x00000008);
+        // Битовые маски ArduPilot для проверки датчиков
+        let gyroOk = (health & 0x00000001);          // 3D gyro
+        let accelOk = (health & 0x00000002);         // 3D accel
+        let baroOk = (health & 0x00000004);          // absolute pressure (барометр)
 
         if (gyroOk && accelOk) {
             document.getElementById('gyroLine').innerHTML = '• ГИРОСКОП: <span style="color:#4caf50">ОК (ICM42688)</span>';
@@ -105,17 +105,15 @@ function handleMavlinkMessage(msgId, payload) {
 
         if (baroOk) {
             document.getElementById('baroLine').innerHTML = '• БАРОМЕТР: <span style="color:#4caf50">ОК (DPS310)</span>';
-        } else if (baroPresent) {
-            document.getElementById('baroLine').innerHTML = '• БАРОМЕТР: <span style="color:#f44336">ОШИБКА</span>';
         } else {
-            document.getElementById('baroLine').innerHTML = '• БАРОМЕТР: <span style="color:#ff9800">НЕ ОБНАРУЖЕН</span>';
+            document.getElementById('baroLine').innerHTML = '• БАРОМЕТР: <span style="color:#f44336">ОШИБКА ИЛИ ОТСУТСТВУЕТ</span>';
         }
     }
 
     // 2. GPS_RAW_INT (ID: 24) — Статус спутников GPS напрямую от прошивки
     if (msgId === 24) {
-        let fixType = view.getUint8(28);
-        let satellitesVisible = view.getUint8(29);
+        let fixType = view.getUint8(28); // Тип фикса (0-1: нет, 2: 2D, 3: 3D и т.д.)
+        let satellitesVisible = view.getUint8(29); // Количество видимых спутников
 
         if (fixType > 0) {
             document.getElementById('gpsLine').innerHTML = `• Модуль GPS: <span style="color:#4caf50">ПОДКЛЮЧЕН (Спутников: ${satellitesVisible})</span>`;
