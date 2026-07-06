@@ -84,40 +84,38 @@ function parseBuffer() {
 }
 
 function handleMavlinkMessage(msgId, payload) {
-    if (payload.length < 12) return;
     let view = new DataView(payload.buffer, payload.byteOffset, payload.byteLength);
 
     // 1. SYS_STATUS (ID: 1) — Статус здоровья датчиков на борту
     if (msgId === 1) {
-        let health = view.getUint32(8, true); 
+        let present = view.getUint32(0, true); // какие датчики есть на борту
+        let health  = view.getUint32(8, true); // какие работают нормально
 
-        let gyroPresent = (health & 0x00000001); 
-        let accelPresent = (health & 0x00000002); 
-        let baroPresent = (health & 0x00000008); 
+        let gyroOk  = (health & 0x00000001); // 3D gyro
+        let accelOk = (health & 0x00000002); // 3D accel
+        let baroOk  = (health & 0x00000008); // absolute pressure (барометр) — исправлено с 0x04
 
-        if (health > 0) {
-            if (gyroPresent || accelPresent) {
-                document.getElementById('gyroLine').innerHTML = '• ГИРОСКОП: <span style="color:#4caf50">ОК (ICM42688)</span>';
-            } else {
-                document.getElementById('gyroLine').innerHTML = '• ГИРОСКОП: <span style="color:#f44336">ОШИБКА ДАТЧИКА</span>';
-            }
+        let baroPresent = (present & 0x00000008);
 
-            if (baroPresent) {
-                document.getElementById('baroLine').innerHTML = '• БАРОМЕТР: <span style="color:#4caf50">ОК (DPS310)</span>';
-            } else {
-                document.getElementById('baroLine').innerHTML = '• БАРОМЕТР: <span style="color:#f44336">ОШИБКА ДАТЧИКА</span>';
-            }
+        if (gyroOk && accelOk) {
+            document.getElementById('gyroLine').innerHTML = '• ГИРОСКОП: <span style="color:#4caf50">ОК (ICM42688)</span>';
         } else {
-            // Если маска пустая, но пакеты идут — плата жива
-            document.getElementById('gyroLine').innerHTML = '• ГИРОСКОП: <span style="color:#4caf50">ДАННЫЕ ИДУТ (ОК)</span>';
-            document.getElementById('baroLine').innerHTML = '• БАРОМЕТР: <span style="color:#4caf50">ДАННЫЕ ИДУТ (ОК)</span>';
+            document.getElementById('gyroLine').innerHTML = '• ГИРОСКОП: <span style="color:#f44336">ОШИБКА ИЛИ ОТСУТСТВУЕТ</span>';
+        }
+
+        if (baroOk) {
+            document.getElementById('baroLine').innerHTML = '• БАРОМЕТР: <span style="color:#4caf50">ОК (DPS310)</span>';
+        } else if (baroPresent) {
+            document.getElementById('baroLine').innerHTML = '• БАРОМЕТР: <span style="color:#f44336">ОШИБКА</span>';
+        } else {
+            document.getElementById('baroLine').innerHTML = '• БАРОМЕТР: <span style="color:#ff9800">НЕ ОБНАРУЖЕН</span>';
         }
     }
 
-    // 2. GPS_RAW_INT (ID: 24) — Статус спутников GPS
+    // 2. GPS_RAW_INT (ID: 24) — Статус спутников GPS напрямую от прошивки
     if (msgId === 24) {
-        let fixType = view.getUint8(28); 
-        let satellitesVisible = view.getUint8(29); 
+        let fixType = view.getUint8(28);
+        let satellitesVisible = view.getUint8(29);
 
         if (fixType > 0) {
             document.getElementById('gpsLine').innerHTML = `• Модуль GPS: <span style="color:#4caf50">ПОДКЛЮЧЕН (Спутников: ${satellitesVisible})</span>`;
