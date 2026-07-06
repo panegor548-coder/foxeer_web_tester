@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Foxeer F405 Web Tester</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+    <div class="container">
+        <h1>Автоматический стенд Foxeer Web v3.0</h1>
+
+        <div class="card">
+            <button id="connectBtn">🔌 ПОДКЛЮЧИТЬ ПЛАТУ</button>
+            <div id="statusLabel" class="status-text disconnected">Отключено</div>
+        </div>
+
+        <div class="result-frame">
+            <div class="sensor-line" id="gyroLine">• ГИРОСКОП: <span class="val">Ожидание</span></div>
+            <div class="sensor-line" id="baroLine">• БАРОМЕТР: <span class="val">Ожидание</span></div>
+            <div class="sensor-line" id="gpsLine">• Модуль GPS: <span class="val">Ожидание</span></div>
+            <div class="sensor-line" id="osdLine">• Графический чип OSD: <span class="val">Ожидание</span></div>
+            <div class="sensor-line" id="motLine">• Выходы моторов (ESC): <span class="val">Ожидание</span></div>
+            <div class="sensor-line" id="uartLine">• Шины UART: <span class="val">Ожидание</span></div>
+        </div>
+    </div>
+    <script src="app.js"></script>
+</body>
+
+</html>
