@@ -37,7 +37,7 @@ async function readLoop() {
             while (true) {
                 const { value, done } = await reader.read();
                 if (done) break;
-
+                
                 let newBuffer = new Uint8Array(byteBuffer.length + value.length);
                 newBuffer.set(byteBuffer);
                 newBuffer.set(value, byteBuffer.length);
@@ -56,7 +56,7 @@ async function readLoop() {
 function parseBuffer() {
     while (byteBuffer.length > 0) {
         let startIndex = byteBuffer.indexOf(0xFD);
-
+        
         if (startIndex === -1) {
             byteBuffer = new Uint8Array(0);
             break;
@@ -66,13 +66,13 @@ function parseBuffer() {
             byteBuffer = byteBuffer.slice(startIndex);
         }
 
-        if (byteBuffer.length < 12) break;
+        if (byteBuffer.length < 12) break; 
 
         let payloadLen = byteBuffer[1];
         let msgId = byteBuffer[7] | (byteBuffer[8] << 8) | (byteBuffer[9] << 16);
-        let packetLen = 12 + payloadLen + 2;
+        let packetLen = 12 + payloadLen + 2; 
 
-        if (byteBuffer.length < packetLen) break;
+        if (byteBuffer.length < packetLen) break; 
 
         let packetData = byteBuffer.slice(10, 10 + payloadLen);
         handleMavlinkMessage(msgId, packetData);
@@ -86,8 +86,8 @@ function handleMavlinkMessage(msgId, payload) {
 
     // Обработка базового статуса SYS_STATUS (оставляем для гироскопа)
     if (msgId === 1) {
-        let health = view.getUint32(8, true);
-        let gyroOk = (health & 0x00000001) && (health & 0x00000002);
+        let health = view.getUint32(8, true); 
+        let gyroOk = (health & 0x00000001) && (health & 0x00000002); 
 
         if (gyroOk) {
             document.getElementById('gyroLine').innerHTML = '• ГИРОСКОП: <span style="color:#4caf50">ICM42688 (Foxeer) - РАБОТАЕТ</span>';
@@ -98,7 +98,7 @@ function handleMavlinkMessage(msgId, payload) {
 
     // Обработка данных от Lua-скрипта
     if (msgId === 252) {
-        let value = view.getInt32(4, true);
+        let value = view.getInt32(4, true); 
         let nameBytes = payload.slice(8, 18);
         let name = new TextDecoder().decode(nameBytes).replace(/\0/g, '').trim();
 
